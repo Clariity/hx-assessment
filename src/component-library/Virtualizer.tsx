@@ -94,24 +94,22 @@ export const Virtualizer = ({
           overflow: "hidden",
         }}
       >
-        {new Array(lastVisibleRow + 1 - firstVisibleRow)
-          .fill(null)
-          .map((_, y) =>
-            new Array(lastVisibleColumn + 1 - firstVisibleColumn)
-              .fill(null)
-              .map((__, x) => {
-                const rowIndex = firstVisibleRow + y;
-                const columnIndex = firstVisibleColumn + x;
-                const style: React.CSSProperties = {
-                  position: "fixed",
-                  top: rowIndex * rowHeight,
-                  left: columnIndex * columnWidth,
-                  height: rowHeight,
-                  width: columnWidth,
-                };
-                return children({ rowIndex, columnIndex, style });
-              })
-          )}
+        {[...new Array(lastVisibleRow + 1 - firstVisibleRow)].map((_, y) =>
+          [...new Array(lastVisibleColumn + 1 - firstVisibleColumn)].map(
+            (__, x) => {
+              const rowIndex = firstVisibleRow + y;
+              const columnIndex = firstVisibleColumn + x;
+              const style: React.CSSProperties = {
+                position: "fixed",
+                top: rowIndex * rowHeight,
+                left: columnIndex * columnWidth,
+                height: rowHeight,
+                width: columnWidth,
+              };
+              return children({ rowIndex, columnIndex, style });
+            }
+          )
+        )}
       </div>
     </div>
   );
