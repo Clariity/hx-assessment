@@ -1,44 +1,10 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 
-const checkNumberProp = (prop: any, fallback: number): number => {
-  if (typeof prop === "number") {
-    return prop;
-  } else {
-    return fallback;
-  }
-};
-
-const checkNumberOrFunctionProp = (
-  prop: any,
-  fallback: number
-): number | ((index: number) => number) => {
-  if (typeof prop === "number" || typeof prop === "function") {
-    return prop;
-  } else {
-    return fallback;
-  }
-};
-
-const checkFunctionProp = (
-  prop: any,
-  fallback: () => null
-): ((info: {
-  rowIndex: number;
-  columnIndex: number;
-  style: React.CSSProperties;
-}) => JSX.Element | null) => {
-  if (typeof prop === "function") {
-    return prop;
-  } else {
-    return fallback;
-  }
-};
-
-export const Virtualizer = React.memo<{
+interface VirtualizerProps {
   numRows: number;
   numColumns: number;
-  rowHeight: number | ((index: number) => number);
-  columnWidth: number | ((index: number) => number);
+  rowHeight: number;
+  columnWidth: number;
   containerHeight: number;
   containerWidth: number;
   children: (info: {
@@ -46,45 +12,68 @@ export const Virtualizer = React.memo<{
     columnIndex: number;
     style: React.CSSProperties;
   }) => JSX.Element | null;
-}>((props) => {
-  const numRows = checkNumberProp(props.numRows, 0);
-  const numColumns = checkNumberProp(props.numColumns, 0);
-  const rowHeight = checkNumberOrFunctionProp(props.rowHeight, 0);
-  const columnWidth = checkNumberOrFunctionProp(props.columnWidth, 0);
-  const containerHeight = checkNumberProp(props.containerHeight, 0);
-  const containerWidth = checkNumberProp(props.containerWidth, 0);
-  const children = checkFunctionProp(props.children, () => null);
+}
 
-  const totalHeight =
-    typeof rowHeight === "number"
-      ? numRows * rowHeight
-      : new Array(numRows)
-          .fill(null)
-          .reduce<number>((acc, _, index) => acc + rowHeight(index), 0);
-  const totalWidth =
-    typeof columnWidth === "number"
-      ? numColumns * columnWidth
-      : new Array(numColumns)
-          .fill(null)
-          .reduce<number>((acc, _, index) => acc + columnWidth(index), 0);
+export const Virtualizer = ({
+  numRows = 0,
+  numColumns = 0,
+  rowHeight = 0,
+  columnWidth = 0,
+  containerHeight = 0,
+  containerWidth = 0,
+  children = () => null,
+}: VirtualizerProps) => {
+  const [firstVisibleRow, setFirstVisibleRow] = useState<number>(0);
+  const [lastVisibleRow, setLastVisibleRow] = useState<number>(
+    Math.min(Math.ceil(containerHeight / rowHeight) - 1, numRows - 1)
+  );
+  const [firstVisibleColumn, setFirstVisibleColumn] = useState<number>(0);
+  const [lastVisibleColumn, setLastVisibleColumn] = useState<number>(
+    Math.min(Math.ceil(containerWidth / columnWidth) - 1, numColumns - 1)
+  );
 
-  const [firstVisibleRow, setFirstVisibleRow] = useState(0);
-  const [lastVisibleRow, setLastVisibleRow] = useState(0);
-  const [firstVisibleColumn, setFirstVisibleColumn] = useState(0);
-  const [lastVisibleColumn, setLastVisibleColumn] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const handleVisibleRows = useCallback(
+    (currentTarget: HTMLDivElement) => {
+      const { scrollTop, scrollLeft } = currentTarget;
+      setFirstVisibleRow(Math.floor(scrollTop / rowHeight));
+      setLastVisibleRow(
+        Math.min(
+          Math.ceil((scrollTop + containerHeight) / rowHeight) - 1,
+          numRows - 1
+        )
+      );
+      setFirstVisibleColumn(Math.floor(scrollLeft / columnWidth));
+      setLastVisibleColumn(
+        Math.min(
+          Math.ceil((scrollLeft + containerWidth) / columnWidth) - 1,
+          numColumns - 1
+        )
+      );
+    },
+    [
+      columnWidth,
+      containerHeight,
+      containerWidth,
+      numColumns,
+      numRows,
+      rowHeight,
+    ]
+  );
 
   const onScroll = useCallback<React.UIEventHandler<HTMLDivElement>>(
     ({ currentTarget }) => {
-      const { scrollTop, scrollLeft } = currentTarget;
-      setFirstVisibleRow(Math.floor(scrollTop / rowHeight));
-      setLastVisibleRow(Math.floor((scrollTop + containerHeight) / rowHeight));
-      setFirstVisibleColumn(Math.floor(scrollLeft / columnWidth));
-      setLastVisibleColumn(
-        Math.floor((scrollLeft + containerWidth) / columnWidth)
-      );
+      handleVisibleRows(currentTarget);
     },
-    []
+    [handleVisibleRows]
   );
+
+  useEffect(() => {
+    if (scrollRef.current !== null) {
+      handleVisibleRows(scrollRef.current);
+    }
+  }, [handleVisibleRows]);
 
   return (
     <div
@@ -92,14 +81,16 @@ export const Virtualizer = React.memo<{
         height: containerHeight,
         width: containerWidth,
         overflow: "auto",
+        backgroundColor: "aliceblue",
       }}
       onScroll={onScroll}
+      ref={scrollRef}
     >
       <div
         style={{
           position: "relative",
-          height: totalHeight,
-          width: totalWidth,
+          height: numRows * rowHeight,
+          width: numColumns * columnWidth,
           overflow: "hidden",
         }}
       >
@@ -113,32 +104,10 @@ export const Virtualizer = React.memo<{
                 const columnIndex = firstVisibleColumn + x;
                 const style: React.CSSProperties = {
                   position: "fixed",
-                  top:
-                    typeof rowHeight === "number"
-                      ? rowIndex * rowHeight
-                      : new Array(rowIndex)
-                          .fill(null)
-                          .reduce<number>(
-                            (acc, cur, index) => acc + rowHeight(index),
-                            0
-                          ),
-                  left:
-                    typeof columnWidth === "number"
-                      ? columnIndex * columnWidth
-                      : new Array(columnIndex)
-                          .fill(null)
-                          .reduce<number>(
-                            (acc, cur, index) => acc + columnWidth(index),
-                            0
-                          ),
-                  height:
-                    typeof rowHeight === "number"
-                      ? rowHeight
-                      : rowHeight(rowIndex),
-                  width:
-                    typeof columnWidth === "number"
-                      ? columnWidth
-                      : columnWidth(columnIndex),
+                  top: rowIndex * rowHeight,
+                  left: columnIndex * columnWidth,
+                  height: rowHeight,
+                  width: columnWidth,
                 };
                 return children({ rowIndex, columnIndex, style });
               })
@@ -146,4 +115,4 @@ export const Virtualizer = React.memo<{
       </div>
     </div>
   );
-});
+};
